@@ -264,6 +264,18 @@ details.ch summary .row { flex: none; }
 .hint { background: rgba(217,180,90,.1); border-left: 3px solid var(--gold); border-radius: 6px; padding: 8px 10px; font-size: 14px; }
 .course-card.weak { border-color: var(--gold); background: rgba(217,180,90,.08); }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--gold); text-decoration: underline; cursor: pointer; font: inherit; }
+
+/* tap-to-pick equity calculator */
+.slotrow { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: center; }
+.slotrow .lbl { font-size: 13px; color: var(--muted); font-weight: 700; }
+.slotrow .hand { justify-content: flex-start; }
+.slot { background: none; border: 0; padding: 0; cursor: pointer; border-radius: 7px; }
+.slot.active { outline: 2px solid var(--gold); outline-offset: 2px; }
+.pc.empty { background: transparent; border: 1.5px dashed var(--line); box-shadow: none; color: var(--muted); font-size: 16px; }
+.picker { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; }
+.pk { border: 0; border-radius: 4px; background: var(--paper); color: var(--suit-s); font-family: var(--font-num); font-weight: 600; font-size: 12px; padding: 6px 0; line-height: 1.15; cursor: pointer; letter-spacing: -.04em; }
+.pk.h { color: var(--suit-h); } .pk.d { color: var(--suit-d); } .pk.c { color: var(--suit-c); }
+.pk:disabled { opacity: .18; cursor: default; }
 footer { margin-top: 30px; font-size: 12px; color: var(--muted); text-align: center; }
 </style>
 

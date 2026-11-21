@@ -492,8 +492,79 @@
 
   // ---- equity calculator ----
   var eqState = { players: ['AhKh', 'QQ+,AKs,AKo'], board: '' };
+  // ---- tap-to-tapSel calculator (default) ----
+  var eqMode = 'tap';
+  var tapSel = { hero: [E.card('Ah'), E.card('Kh')], vill: [E.card('Qs'), E.card('Qd')], board: [null, null, null, null, null], active: ['board', 0], vmode: 'hand' };
+  var VMODES = [['hand', '特定の2枚'], ['random', 'ランダムな手'], ['UTG', 'UTGのオープンレンジ'], ['HJ', 'HJのオープンレンジ'], ['CO', 'COのオープンレンジ'], ['BTN', 'BTNのオープンレンジ'], ['SB', 'SBのオープンレンジ']];
   function labEquity() {
     var body = $('#labBody');
+    body.innerHTML = '<div class="tabs"><button class="tab" data-em="tap" aria-selected="' + (eqMode === 'tap') + '">タップで選ぶ</button><button class="tab" data-em="text" aria-selected="' + (eqMode === 'text') + '">文字・レンジで入力</button></div><div id="eqWrap" class="stack"></div>';
+    $all('[data-em]', body).forEach(function (b) { b.onclick = function () { eqMode = b.dataset.em; labEquity(); }; });
+    if (eqMode === 'tap') labEquityTap(); else labEquityText();
+  }
+  function labEquityTap() {
+    var wrap = $('#eqWrap');
+    wrap.innerHTML = '<div class="panel stack"><p class="muted" style="margin:0;font-size:13px">枠をタップしてから、下のカードを選びます。埋まった枠をタップすると外せます。ボードは空(プリフロップ)か3〜5枚。</p>' +
+      '<div class="slotrow"><span class="lbl">自分</span><div class="hand" id="slHero"></div></div>' +
+      '<div class="slotrow"><span class="lbl">相手</span><div class="stack" style="gap:8px"><select id="slMode">' + VMODES.map(function (m) { return '<option value="' + m[0] + '"' + (tapSel.vmode === m[0] ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('') + '</select><div class="hand" id="slVill"></div></div></div>' +
+      '<div class="slotrow"><span class="lbl">ボード</span><div class="hand" id="slBoard" style="flex-wrap:wrap"></div></div>' +
+      '<div class="picker" id="picker"></div>' +
+      '<div class="row"><button class="btn ghost" id="eqClear">全部クリア</button><button class="btn gold" id="eqRun">計算する</button><span class="muted num" id="eqInfo"></span></div><div class="progress" hidden id="eqProg"><i></i></div></div><div id="eqOut"></div>';
+    function used() { return tapSel.hero.concat(tapSel.vmode === 'hand' ? tapSel.vill : [], tapSel.board).filter(function (c) { return c != null; }); }
+    function nextEmpty() {
+      var order = [['hero', 2]].concat(tapSel.vmode === 'hand' ? [['vill', 2]] : [], [['board', 5]]);
+      for (var k = 0; k < order.length; k++) for (var i = 0; i < order[k][1]; i++) if (tapSel[order[k][0]][i] == null) return [order[k][0], i];
+      return null;
+    }
+    function slots() {
+      [['hero', 'slHero'], ['vill', 'slVill'], ['board', 'slBoard']].forEach(function (x) {
+        var el = $('#' + x[1]);
+        if (x[0] === 'vill' && tapSel.vmode !== 'hand') { el.innerHTML = ''; return; }
+        el.innerHTML = tapSel[x[0]].map(function (c, i) {
+          var act = tapSel.active && tapSel.active[0] === x[0] && tapSel.active[1] === i;
+          return '<button type="button" class="slot' + (act ? ' active' : '') + '" data-sl="' + x[0] + ':' + i + '" aria-label="' + (c == null ? '空き枠' : E.disp(E.cardStr(c))) + '">' + (c == null ? '<span class="pc sm empty">+</span>' : cardHTML(c, 'sm')) + '</button>';
+        }).join('');
+      });
+      $all('[data-sl]', wrap).forEach(function (b) { b.onclick = function () {
+        var a = b.dataset.sl.split(':'), k = a[0], i = +a[1];
+        if (tapSel[k][i] != null) tapSel[k][i] = null;
+        tapSel.active = [k, i]; slots(); picker();
+      }; });
+    }
+    function picker() {
+      var u = {}; used().forEach(function (c) { u[c] = 1; });
+      var h = '';
+      for (var s = 0; s < 4; s++) for (var r = 12; r >= 0; r--) {
+        var c = (r << 2) | [3, 2, 1, 0][s], str = E.cardStr(c);
+        h += '<button type="button" class="pk ' + str[1] + '" data-pk="' + c + '"' + (u[c] ? ' disabled' : '') + '>' + (str[0] === 'T' ? '10' : str[0]) + '<br>' + SUIT_SYM[str[1]] + '</button>';
+      }
+      $('#picker').innerHTML = h;
+      $all('[data-pk]', wrap).forEach(function (b) { b.onclick = function () {
+        if (!tapSel.active) tapSel.active = nextEmpty();
+        if (!tapSel.active) return;
+        tapSel[tapSel.active[0]][tapSel.active[1]] = +b.dataset.pk;
+        tapSel.active = nextEmpty(); slots(); picker();
+      }; });
+    }
+    slots(); picker();
+    $('#slMode').onchange = function () { tapSel.vmode = this.value; if (tapSel.active && tapSel.active[0] === 'vill' && tapSel.vmode !== 'hand') tapSel.active = nextEmpty(); slots(); picker(); };
+    $('#eqClear').onclick = function () { tapSel.hero = [null, null]; tapSel.vill = [null, null]; tapSel.board = [null, null, null, null, null]; tapSel.active = ['hero', 0]; $('#eqOut').innerHTML = ''; slots(); picker(); };
+    $('#eqRun').onclick = function () {
+      var out = $('#eqOut');
+      var hero = tapSel.hero.filter(function (c) { return c != null; }), vill = tapSel.vill.filter(function (c) { return c != null; }), board = tapSel.board.filter(function (c) { return c != null; });
+      if (hero.length < 2) { out.innerHTML = '<div class="fb ng">自分のカードを2枚選んでください。</div>'; return; }
+      if (tapSel.vmode === 'hand' && vill.length < 2) { out.innerHTML = '<div class="fb ng">相手のカードを2枚選ぶか、上の選択で「ランダムな手」やオープンレンジを選んでください。</div>'; return; }
+      var cs = function (a) { return a.map(E.cardStr).join(''); };
+      var vstr = tapSel.vmode === 'hand' ? cs(vill) : tapSel.vmode === 'random' ? PRESETS[PRESETS.length - 1][1] : D.rfi[tapSel.vmode];
+      eqState.players = [cs(hero), vstr];
+      eqState.board = cs(board);
+      eqState.names = ['あなた ' + E.disp(cs(hero)), tapSel.vmode === 'hand' ? '相手 ' + E.disp(cs(vill)) : '相手: ' + VMODES.filter(function (m) { return m[0] === tapSel.vmode; })[0][1]];
+      runEquity();
+    };
+  }
+  function labEquityText() {
+    eqState.names = null;
+    var body = $('#eqWrap');
     body.innerHTML = '<div class="panel stack"><p class="muted" style="margin:0;font-size:13px">10は「10」でも「T」でも入力できます。具体的な手(例: AhKh)でも、レンジ(例: QQ+,AKs)でも入力できます。ボードは 0〜5枚(例: Kh9h4c)。カードは A K Q J T 9…2 と s h d c で書きます。</p>' +
       '<div id="eqPlayers" class="stack"></div><div class="row"><button class="btn small ghost" id="eqAdd">+ プレイヤー追加</button></div>' +
       '<label class="f">ボード<input type="text" id="eqBoard" placeholder="空欄ならプリフロップ" value="' + esc(eqState.board) + '"></label>' +
@@ -548,9 +619,9 @@
       var colors = ['var(--gold)', 'var(--blue)', 'var(--red)', 'var(--green)', 'var(--purple)', 'var(--slate)'];
       info.textContent = label;
       out.innerHTML = '<div class="panel stack"><div class="bars">' + eq.map(function (e, i) {
-        return '<div class="bar"><span class="lbl">P' + (i + 1) + ' ' + esc(eqState.players[i]) + '</span><span class="track"><i style="width:' + (e * 100) + '%;background:' + colors[i] + '"></i></span><span class="num">' + pct(e) + '</span></div>';
+        return '<div class="bar"><span class="lbl">' + esc(eqState.names ? eqState.names[i] : 'P' + (i + 1) + ' ' + E.disp(eqState.players[i])) + '</span><span class="track"><i style="width:' + (e * 100) + '%;background:' + colors[i] + '"></i></span><span class="num">' + pct(e) + '</span></div>';
       }).join('') + '</div><div class="detail"><table><tr><th>プレイヤー</th><th>勝率</th><th>勝ち</th><th>引分</th></tr>' + eq.map(function (e, i) {
-        return '<tr><td>P' + (i + 1) + '</td><td>' + pct(e, 2) + '</td><td>' + pct(win[i], 2) + '</td><td>' + pct(tie[i], 2) + '</td></tr>';
+        return '<tr><td>' + (eqState.names ? (i ? '相手' : 'あなた') : 'P' + (i + 1)) + '</td><td>' + pct(e, 2) + '</td><td>' + pct(win[i], 2) + '</td><td>' + pct(tie[i], 2) + '</td></tr>';
       }).join('') + '</table></div><ul class="plain muted"><li><b>勝率</b>: 引き分けを半分の勝ちとして数えた、最後まで行ったときに勝つ確率。</li><li><b>勝ち</b>: 単独で勝つ確率。<b>引分</b>: 同じ強さで山分けになる確率。</li></ul></div>';
     }
   }
