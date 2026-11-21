@@ -9,3 +9,9 @@
 - `data/equity169.json` 169種類の手どうしのオールイン勝率表(`tools/precompute-equity.js` で生成)
 
 テスト: `node tools/test-engine.js` と `node tools/test-solver.js`
+
+## 対戦モードとレッスン
+- `game.js` 6人卓の進行(サイドポット対応)、ボット3レベル(格下/同等/格上)、レンジ推定、判断の採点、統計と弱点分析
+- `play.js` 対戦画面・オーダーメイドレッスン・専用特訓・AIコーチ
+- プレー記録はアーティファクトのデータベース `hands` に保存(本人のみ読み書き)。使えない環境では端末に保存
+- テスト: `node tools/test-game.js 400`(ボット同士で400ハンド。チップ保存と終了を確認)

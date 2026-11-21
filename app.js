@@ -94,6 +94,8 @@
     var total = Object.keys(P.stats).reduce(function (s, k) { return s + P.stats[k].n; }, 0);
     var hand = pick(['AhKh', 'AsAd', 'QcJc', '9d9s', 'KsQs', '7h6h']);
     var modes = [
+      ['play', '対戦モード', '5人のボット(格下・同等・格上)と6人卓で実戦。あなたの判断はその場で採点され、記録されます。', 'var(--red)', acc('play')],
+      ['lesson', 'オーダーメイドレッスン', '対戦の記録からあなたの弱点を見つけ、専用の特訓とAIコーチのアドバイスを出します。', 'var(--gold)', '記録から分析'],
       ['preflop', 'プリフロップ道場', '手札と席を見て、オープン・3ベット・コール・フォールドを即決する練習。', 'var(--red)', acc('preflop')],
       ['odds', 'オッズ特訓', 'ポットオッズ、アウツ、MDF、コンボ数。毎回ランダムに出題し、勝率はエンジンで正確に計算。', 'var(--blue)', acc('odds')],
       ['scenario', '実戦シナリオ', 'フロップからリバーまでの典型的な12場面。理由つきで最適な行動を学ぶ。', 'var(--gold)', acc('scenario')],
@@ -114,7 +116,7 @@
       '<div class="modes">' + modes.map(function (m) {
         return '<button class="mode" data-go="' + m[0] + '"><div class="top"><i class="chip" style="--c:' + m[3] + '"></i><h3>' + m[1] + '</h3></div><p>' + m[2] + '</p><div class="meter">' + m[4] + '</div></button>';
       }).join('') + '</div>' +
-      '<p class="note-box" style="margin-top:18px">おすすめの順番: 理論の書の1〜3章 → プリフロップ道場 → オッズ特訓 → 実戦シナリオ → 計算ラボで「なぜ」を確かめる。</p>';
+      '<p class="note-box" style="margin-top:18px">おすすめの回し方: 対戦モードで30ハンド → オーダーメイドレッスンで弱点を確認 → 出された特訓をこなす → また対戦。基礎が不安なら理論の書の1〜3章から。</p>';
   };
 
   // ================= PREFLOP =================
@@ -387,7 +389,7 @@
   }
 
   // ================= LEARN =================
-  var learnTab = 'theory';
+  var learnTab = 'theory', learnOpen = null;
   views.learn = function () {
     app.innerHTML = backBtn() + '<div class="stack"><h2>理論の書</h2><div class="tabs">' +
       [['theory', '理論'], ['glossary', '用語集'], ['sources', '参考資料']].map(function (t) { return '<button class="tab" data-t="' + t[0] + '" aria-selected="' + (learnTab === t[0]) + '">' + t[1] + '</button>'; }).join('') +
@@ -396,8 +398,9 @@
     var body = $('#lBody');
     if (learnTab === 'theory') {
       body.innerHTML = D.theory.map(function (t, i) {
-        return '<details class="ch"' + (i === 0 ? ' open' : '') + '><summary><span class="lvl">' + t.level + '</span><span>' + (i + 1) + '. ' + t.title + '</span></summary><div class="prose">' + t.body.join('') + '</div></details>';
+        return '<details class="ch"' + ((learnOpen ? t.id === learnOpen : i === 0) ? ' open id="openCh"' : '') + '><summary><span class="lvl">' + t.level + '</span><span>' + (i + 1) + '. ' + t.title + '</span></summary><div class="prose">' + t.body.join('') + '</div></details>';
       }).join('');
+      if (learnOpen && $('#openCh')) { $('#openCh').scrollIntoView({ block: 'start' }); learnOpen = null; }
     } else if (learnTab === 'glossary') {
       body.innerHTML = '<div class="panel"><dl class="gl">' + D.glossary.map(function (g) { return '<dt>' + esc(g[0]) + '</dt><dd>' + esc(g[1]) + '</dd>'; }).join('') + '</dl></div>';
     } else {
@@ -662,6 +665,11 @@
     });
   }
 
+  if (window.PT_PLAY) window.PT_PLAY({
+    app: app, views: views, go: go, $: $, $all: $all, esc: esc, cardHTML: cardHTML, gridHTML: gridHTML, mixBG: mixBG, award: award,
+    backBtn: backBtn, actionMap: actionMap, chartHTML: chartHTML,
+    openTheory: function (id) { learnTab = 'theory'; learnOpen = id; go('learn'); }
+  });
   renderHUD();
   route();
 })();

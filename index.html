@@ -219,6 +219,34 @@ dl.gl dt { font-weight: 700; color: var(--gold); } dl.gl dd { margin: 0; color: 
 .crumbs { display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; }
 .crumbs button { background: rgba(0,0,0,.3); border: 0; border-radius: 6px; padding: 3px 8px; cursor: pointer; color: var(--ink); }
 .note-box { font-size: 13px; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; }
+
+/* play table */
+.ptable { position: relative; width: 100%; height: clamp(420px, 118vw, 560px); max-height: 560px; }
+.ptable .felt { position: absolute; inset: 14% 6% 16%; border-radius: 50% / 42%; background: radial-gradient(ellipse at 50% 40%, #1f6b4f, #134634 70%); border: 10px solid #3a2414; box-shadow: inset 0 0 0 2px rgba(0,0,0,.35), inset 0 10px 30px rgba(0,0,0,.35), 0 6px 0 var(--rail); }
+.ptable .center { position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%); text-align: center; width: 70%; }
+.ptable .center .board { min-height: 0; margin: 0 0 6px; gap: 4px; }
+.ptable .center .pc { width: 34px; height: 48px; } .ptable .center .pc b { font-size: 17px; } .ptable .center .pc i { font-size: 15px; }
+.seatbox { position: absolute; transform: translate(-50%, -50%); background: rgba(8,32,26,.92); border: 1px solid var(--line); border-radius: 10px; padding: 5px 7px; min-width: 84px; max-width: 30%; text-align: center; font-size: 11px; line-height: 1.3; transition: opacity .2s, box-shadow .2s; z-index: 2; }
+.seatbox .who { display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.seatbox .who b { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 6em; }
+.seatbox .hand { gap: 2px; margin: 3px 0; }
+.seatbox .pc.sm { width: 26px; height: 36px; } .seatbox .pc.sm b { font-size: 13px; } .seatbox .pc.sm i { font-size: 11px; }
+.seatbox .stk { color: var(--muted); }
+.seatbox.folded { opacity: .45; }
+.seatbox.acting { box-shadow: 0 0 0 2px var(--gold), 0 0 18px rgba(242,193,78,.45); }
+.seatbox.winner { box-shadow: 0 0 0 2px var(--green), 0 0 18px rgba(59,178,115,.5); }
+.seatbox .lastact { font-weight: 700; color: var(--gold); }
+.seatbox .betchip { position: absolute; left: 50%; transform: translateX(-50%); bottom: -20px; font-family: var(--font-num); font-size: 11px; background: rgba(0,0,0,.55); border-radius: 99px; padding: 1px 7px; white-space: nowrap; display: flex; gap: 4px; align-items: center; }
+.posb { font-family: var(--font-num); font-size: 9px; background: rgba(255,255,255,.12); padding: 0 4px; border-radius: 4px; }
+.posb.dealer { background: var(--ink); color: #111; }
+.lvl-fish, .lvl-reg, .lvl-pro { font-size: 9px; padding: 0 4px; border-radius: 4px; color: #111; font-weight: 700; }
+.lvl-fish { background: var(--green); } .lvl-reg { background: var(--gold); } .lvl-pro { background: var(--red); color: #fff; }
+.actpanel { position: sticky; bottom: env(safe-area-inset-bottom, 0px); z-index: 5; }
+.actpanel .sizes .btn { min-height: 34px; }
+.pill { font-size: 11px; padding: 1px 8px; border-radius: 99px; font-family: var(--font-body); white-space: nowrap; }
+.pill.ok { background: rgba(59,178,115,.2); color: var(--green); } .pill.high, .pill.low { background: rgba(229,88,79,.2); color: var(--red); } .pill.muted { color: var(--muted); }
+.leak { border-left: 4px solid var(--red); }
+details.ch summary .row { flex: none; }
 footer { margin-top: 30px; font-size: 12px; color: var(--muted); text-align: center; }
 </style>
 
@@ -238,5 +266,7 @@ footer { margin-top: 30px; font-size: 12px; color: var(--muted); text-align: cen
 
 <script src="engine.js"></script>
 <script src="solver.js"></script>
+<script src="game.js"></script>
 <script src="data.js"></script>
+<script src="play.js"></script>
 <script src="app.js"></script>
