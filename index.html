@@ -254,6 +254,16 @@ dl.gl dt { font-weight: 700; color: var(--gold); } dl.gl dd { margin: 0; color: 
 .pill.ok { background: rgba(59,178,115,.2); color: var(--green); } .pill.high, .pill.low { background: rgba(229,88,79,.2); color: var(--red); } .pill.muted { color: var(--muted); }
 .leak { border-left: 4px solid var(--red); }
 details.ch summary .row { flex: none; }
+
+/* basics course */
+.dots { display: flex; gap: 6px; flex-wrap: wrap; }
+.dot { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--muted); font-family: var(--font-num); font-size: 12px; cursor: pointer; padding: 0; }
+.dot.done { background: rgba(87,196,138,.2); color: var(--green); border-color: var(--green); }
+.dot.on { background: var(--gold); color: #2a1f05; border-color: var(--gold); }
+.dot[disabled] { opacity: .4; cursor: default; }
+.hint { background: rgba(217,180,90,.1); border-left: 3px solid var(--gold); border-radius: 6px; padding: 8px 10px; font-size: 14px; }
+.course-card.weak { border-color: var(--gold); background: rgba(217,180,90,.08); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--gold); text-decoration: underline; cursor: pointer; font: inherit; }
 footer { margin-top: 30px; font-size: 12px; color: var(--muted); text-align: center; }
 </style>
 
@@ -283,5 +293,6 @@ footer { margin-top: 30px; font-size: 12px; color: var(--muted); text-align: cen
 <script src="solver.js"></script>
 <script src="game.js"></script>
 <script src="data.js"></script>
+<script src="course.js"></script>
 <script src="play.js"></script>
 <script src="app.js"></script>

@@ -199,8 +199,10 @@
     function renderNote() {
       var el = $('#pNote'); if (!el) return;
       el.innerHTML = S.notes.map(function (g) {
-        return '<div class="fb pop ' + (g.ok ? 'ok' : 'ng') + '" style="padding:10px 12px"><b style="color:' + (g.ok ? 'var(--green)' : 'var(--red)') + '">' + (g.ok ? 'ナイス判断' : 'コーチより') + '</b> ' + esc(g.msg) + '</div>';
+        var link = !g.ok && g.type === 'facing' ? ' <button class="linkbtn" data-course="odds">必要勝率の出し方を1から</button>' : !g.ok && g.type && g.type.indexOf('pf') === 0 ? ' <button class="linkbtn" data-course="preflop">プリフロップの基礎</button>' : '';
+        return '<div class="fb pop ' + (g.ok ? 'ok' : 'ng') + '" style="padding:10px 12px"><b style="color:' + (g.ok ? 'var(--green)' : 'var(--red)') + '">' + (g.ok ? 'ナイス判断' : 'コーチより') + '</b> ' + esc(g.msg) + link + '</div>';
       }).join('');
+      if (ui.bindCourseButtons) ui.bindCourseButtons(el);
     }
 
     function renderResult() {
@@ -256,7 +258,10 @@
       var body = $('#lsBody'); if (!body) return;
       body.dataset.done = '1';
       if (!hands.length) {
-        body.innerHTML = '<div class="panel stack" style="text-align:center"><h3>まだプレー記録がありません</h3><p class="muted" style="margin:0">対戦モードで遊ぶと、あなたの判断を1つずつ採点して、弱点に合わせたレッスンを作ります。まずは30ハンドほど遊んでみてください。</p><div><button class="btn gold" data-go="play">対戦モードへ</button></div></div>';
+        var ca0 = ui.courseAreas ? ui.courseAreas([]) : [];
+        body.innerHTML = ca0.filter(function (a) { return a.weak && !a.done; }).map(ui.courseCard).join('') + '<div class="panel stack" style="text-align:center"><h3>まだプレー記録がありません</h3><p class="muted" style="margin:0">対戦モードで遊ぶと、あなたの判断を1つずつ採点して、弱点に合わせたレッスンを作ります。まずは30ハンドほど遊んでみてください。</p><div><button class="btn gold" data-go="play">対戦モードへ</button></div></div>' +
+          '<h3 style="margin-top:8px">基礎コース</h3>' + ca0.filter(function (a) { return !(a.weak && !a.done); }).map(ui.courseCard).join('');
+        ui.bindCourseButtons(body);
         return;
       }
       var s = G.aggregate(hands), lk = G.leaks(s);
@@ -269,6 +274,11 @@
         '<div class="stat"><div class="v">' + (acc == null ? '—' : acc + '%') + '</div><div class="k">判断の正確さ</div></div></div>';
       if (s.n < 100) html += '<p class="note-box" style="margin:0">今は ' + s.n + 'ハンド分の分析です。統計は100ハンドを超えると信頼できるようになります。収支は運の影響が大きいので、まず「判断の正確さ」を見てください。</p>';
       if (store.mode !== 'cloud') html += '<p class="note-box" style="margin:0">この画面ではクラウドに接続できないため、この端末の記録だけを分析しています。</p>';
+
+      // basics courses for weak areas (decided from quiz + play data)
+      var ca = ui.courseAreas ? ui.courseAreas(hands) : [];
+      var weakC = ca.filter(function (a) { return a.weak && !a.done; });
+      weakC.forEach(function (a) { html += ui.courseCard(a); });
 
       // weaknesses
       html += '<h3 style="margin-top:8px">あなたの弱点 TOP3</h3>';
@@ -314,8 +324,14 @@
           '<div class="stack" style="gap:6px;padding-bottom:10px"><p style="margin:0">' + esc(m.d.msg) + '</p>' + replayHTML(m.hand) + '</div></details>';
       }).join('') + '</div>' : '<p class="muted">採点で見つかった間違いはまだありません。</p>';
 
+      var restC = ca.filter(function (a) { return !(a.weak && !a.done); });
+      if (restC.length) html += '<h3 style="margin-top:8px">基礎コース</h3>' + restC.map(ui.courseCard).join('');
       body.innerHTML = html;
-      $all('[data-drill]', body).forEach(function (b) { b.onclick = function () { var d = b.dataset.drill; if (d === 'preflop') { S.drillHands = hands; ui.go('drill'); } else ui.go(d); }; });
+      ui.bindCourseButtons(body);
+      $all('[data-drill]', body).forEach(function (b) { b.onclick = function () {
+        var d = b.dataset.drill, a = ca.filter(function (x) { return x.area === d; })[0];
+        if (a && a.weak && !a.done) return ui.openCourse(d); // stuck → basics first
+        if (d === 'preflop') { S.drillHands = hands; ui.go('drill'); } else ui.go(d); }; });
       $all('[data-th]', body).forEach(function (b) { b.onclick = function () { ui.openTheory(b.dataset.th); }; });
       $('#aiBtn').onclick = function () { askCoach(s, lk); };
     }
@@ -352,6 +368,8 @@
         '統計(目安: 参加率20〜30%、レイズ参加率16〜25%、3ベット率6〜12%、Cベット率50〜75%、Cベットに降りる率35〜55%、アグレッション1.8〜4、ショーダウン到達率24〜33%): ' + JSON.stringify(stats),
         '自動判定した弱点(多い順): ' + JSON.stringify(lk.slice(0, 4).map(function (l) { return { 弱点: l.title, 回数: l.count }; })),
         '間違えたハンドの例: ' + JSON.stringify(mistakes),
+        '基礎があやふやと判定した分野: ' + JSON.stringify((ui.courseAreas ? ui.courseAreas(store.cache || []) : []).filter(function (a) { return a.weak; }).map(function (a) { return a.title + '(' + a.reasons.join('、') + ')'; })) +
+          '。この分野が含まれる場合は、専門用語を使わず「ポットとは何か」のような基礎の基礎から、足し算・割り算の途中式つきで説明してください。',
         '',
         '次の形で、日本語で答えてください。スマホで読むので短く、表は使わず、全体で500字以内。',
         '1. 結論(いちばん直すべき点を1〜2行)',

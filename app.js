@@ -29,6 +29,12 @@
   var P = { xp: 0, streak: 0, best: 0, stats: {}, scen: {} };
   try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved) P = Object.assign(P, saved); } catch (e) {}
   function save() { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} }
+  P.skills = P.skills || {};
+  // per-skill history (last 12 answers) used to detect weak areas
+  function track(skill, ok) {
+    var s = P.skills[skill] || (P.skills[skill] = { n: 0, ok: 0, r: [] });
+    s.n++; if (ok) s.ok++; s.r.push(ok ? 1 : 0); if (s.r.length > 12) s.r.shift(); save();
+  }
   var TITLES = ['ビギナー', 'ルーキー', 'レギュラー', 'グラインダー', 'シャーク', 'クラッシャー', 'ハイローラー', 'レジェンド'];
   function levelOf(xp) { return Math.floor(Math.sqrt(xp / 40)) + 1; }
   function xpFor(lv) { return 40 * (lv - 1) * (lv - 1); }
@@ -76,14 +82,14 @@
   var COL = { raise: '#e5584f', call: '#3bb273', fold: '#66788a', threebet: '#a45ee0' };
 
   // ---------- router ----------
-  var views = {};
+  var views = {}, ui = {};
   function go(name) { if (location.hash !== '#' + name) location.hash = name; else route(); }
   function route() {
     var name = (location.hash || '#lobby').slice(1);
     if (!views[name]) name = 'lobby';
     app.innerHTML = '';
     window.scrollTo(0, 0);
-    $all('nav.rail a').forEach(function (a) { if (a.dataset.view === name || (name === 'drill' && a.dataset.view === 'lesson')) { a.setAttribute('aria-current', 'page'); a.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } else a.removeAttribute('aria-current'); });
+    $all('nav.rail a').forEach(function (a) { if (a.dataset.view === name || ((name === 'drill' || name === 'course') && a.dataset.view === 'lesson')) { a.setAttribute('aria-current', 'page'); a.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } else a.removeAttribute('aria-current'); });
     views[name]();
   }
   window.addEventListener('hashchange', route);
@@ -207,6 +213,7 @@
     $all('[data-a]', body).forEach(function (b) {
       b.onclick = function () {
         var ans = b.dataset.a, right = m[label], ok = ans === right;
+        track(spot.rfi ? 'rfi' : 'facing', ok);
         $all('[data-a]', body).forEach(function (x) { x.disabled = true; if (x.dataset.a === right) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); });
         award('preflop', ok);
         var names = { raise: 'オープン', fold: 'フォールド', '3bet': '3ベット', call: 'コール' };
@@ -244,7 +251,11 @@
   // ================= ODDS =================
   var ODDS_GEN = [genPotOdds, genMDF, genOuts, genCallFold, genCombos];
   views.odds = function () {
-    app.innerHTML = backBtn() + '<div class="stack"><div class="row" style="justify-content:space-between"><h2>オッズ特訓</h2><span class="muted num">正答率 ' + acc('odds') + '</span></div><div id="oddsBody" class="stack"></div></div>';
+    var oa = ui.courseAreas ? ui.courseAreas(null).filter(function (a) { return a.area === 'odds'; })[0] : null;
+    app.innerHTML = backBtn() + '<div class="stack"><div class="row" style="justify-content:space-between"><h2>オッズ特訓</h2><span class="muted num">正答率 ' + acc('odds') + '</span></div>' +
+      (oa && oa.weak && !oa.done ? ui.courseCard(oa) : '<p class="muted" style="margin:0;font-size:13px">計算が不安なら <button class="linkbtn" data-course="odds">オッズの基礎コース</button> から。</p>') +
+      '<div id="oddsBody" class="stack"></div></div>';
+    if (ui.bindCourseButtons) ui.bindCourseButtons(app);
     oddsQuestion();
   };
   function oddsQuestion() {
@@ -256,10 +267,13 @@
       b.onclick = function () {
         var i = +b.dataset.i, ok = i === q.answer;
         $all('[data-i]', body).forEach(function (x) { x.disabled = true; if (+x.dataset.i === q.answer) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); });
-        award('odds', ok);
-        $('#oFb').innerHTML = '<div class="fb pop ' + (ok ? 'ok' : 'ng') + '"><div class="verdict">' + (ok ? '正解!' : '残念…') + '</div>' + q.explain +
+        award('odds', ok); if (q.skill) track(q.skill, ok);
+        var area = ui.courseAreas ? ui.courseAreas(null).filter(function (a) { return a.area === 'odds'; })[0] : null;
+        var basics = !ok && area && !area.done && q.skill !== 'combos' ? '<div class="hint" style="margin-top:8px">計算の流れがあやふやなら、<button class="linkbtn" data-course="odds">オッズの基礎コース</button>で「ポットってなに?」から確認できます。</div>' : '';
+        $('#oFb').innerHTML = '<div class="fb pop ' + (ok ? 'ok' : 'ng') + '"><div class="verdict">' + (ok ? '正解!' : '残念…') + '</div>' + q.explain + basics +
           '<div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn gold" id="oNext">次の問題 →</button></div></div>';
         $('#oNext').onclick = oddsQuestion;
+        if (ui.bindCourseButtons) ui.bindCourseButtons($('#oFb'));
       };
     });
   }
@@ -278,7 +292,7 @@
     var bet = Math.max(1, Math.round(pot * f));
     var need = bet / (pot + 2 * bet);
     var o = mcOptions(need, [bet / pot, bet / (pot + bet), (pot + bet) / (pot + 2 * bet) - 0.5, need + 0.08, need - 0.07].filter(function (x) { return x > 0.02 && x < 0.95; }), function (x) { return pct(x, 0); });
-    return { table: potTable(pot, bet), q: 'コールするのに必要な勝率は?', options: o.options, answer: o.answer,
+    return { skill: 'potodds', table: potTable(pot, bet), q: 'コールするのに必要な勝率は?', options: o.options, answer: o.answer,
       explain: '<div class="formula">必要勝率 = コール額 ÷ (ポット + ベット + コール額)<br>= ' + bet + ' ÷ (' + pot + ' + ' + bet + ' + ' + bet + ') = ' + pct(need) + '</div><p class="muted">ベットが大きいほど必要勝率は上がりますが、ポットサイズでも33%、2倍のベットでも40%までしか上がりません。</p>' };
   }
   function genMDF() {
@@ -286,7 +300,7 @@
     var bet = Math.max(1, Math.round(pot * f));
     var mdf = pot / (pot + bet);
     var o = mcOptions(mdf, [bet / (pot + 2 * bet), 1 - bet / (pot + 2 * bet) - 0.1, mdf - 0.15, mdf + 0.12, 0.5].filter(function (x) { return x > 0.05 && x < 0.98; }), function (x) { return pct(x, 0); });
-    return { table: potTable(pot, bet), q: 'ブラフで食われないために、最低どれくらいの割合でコール(以上)すべき? (MDF)', options: o.options, answer: o.answer,
+    return { skill: 'mdf', table: potTable(pot, bet), q: 'ブラフで食われないために、最低どれくらいの割合でコール(以上)すべき? (MDF)', options: o.options, answer: o.answer,
       explain: '<div class="formula">MDF = ポット ÷ (ポット + ベット) = ' + pot + ' ÷ ' + (pot + bet) + ' = ' + pct(mdf) + '</div><p class="muted">相手が何も持たずにベットしたとき、利益が出なくなる最低ラインです。これより多く降りると、どんな2枚でもブラフするだけで相手が得をします。ただし実際の相手がブラフ不足なら、もっと降りるのが正解になります(エクスプロイト)。</p>' };
   }
   function dealDistinct(n) {
@@ -318,7 +332,7 @@
     var eqExact = E.equity([[{ c1: x.hero[0], c2: x.hero[1], w: 1 }], [{ c1: x.vil[0], c2: x.vil[1], w: 1 }]], x.board, []).equity[0];
     var rule = x.street === 3 ? n * 4 : n * 2;
     var left = 52 - 4 - x.board.length;
-    return { table: dealTable(x), q: '次の1枚で、あなたが<b>逆転して単独で勝ちになる</b>カード(アウツ)は何枚?', options: o.options, answer: o.answer,
+    return { skill: 'outs', table: dealTable(x), q: '次の1枚で、あなたが<b>逆転して単独で勝ちになる</b>カード(アウツ)は何枚?', options: o.options, answer: o.answer,
       explain: '<p>今はあなたが <b>' + catName(x.hero, x.board) + '</b>、相手が <b>' + catName(x.vil, x.board) + '</b>。</p>' +
         '<p>アウツ ' + n + '枚: </p><div class="board" style="justify-content:flex-start;min-height:0">' + x.outs.map(function (c) { return cardHTML(c, 'sm'); }).join('') + '</div>' +
         '<div class="formula">次の1枚で当たる確率 = ' + n + ' ÷ ' + left + ' = ' + pct(n / left) + '<br>' + (x.street === 3 ? '4の法則(2枚見られる) ≒ ' + n + '×4 = ' + Math.min(rule, 100) + '%' : '2の法則 ≒ ' + n + '×2 = ' + rule + '%') + '<br>エンジンの正確な勝率(引き分け込み): ' + pct(eqExact) + '</div>' +
@@ -335,7 +349,7 @@
       var x = { hero: hero, vil: vil, board: board, street: 4 };
       var call = eq > need;
       var ev = eq * (pot + bet) - (1 - eq) * bet;
-      return { table: dealTable(x, '<span class="pot">ポット ' + pot + 'BB · 相手のベット ' + bet + 'BB</span>'),
+      return { skill: 'callfold', table: dealTable(x, '<span class="pot">ポット ' + pot + 'BB · 相手のベット ' + bet + 'BB</span>'),
         q: '相手の手は見えている前提。リバーは1枚。コールとフォールド、得なのは?', options: ['フォールド', 'コール'], answer: call ? 1 : 0,
         explain: '<div class="formula">あなたの勝率(全' + (52 - 8) + '通りを計算) = ' + pct(eq) + '<br>必要勝率 = ' + bet + ' ÷ ' + (pot + 2 * bet) + ' = ' + pct(need) + '<br>コールの期待値 = ' + pct(eq, 1) + '×' + (pot + bet) + ' − ' + pct(1 - eq, 1) + '×' + bet + ' = ' + (ev >= 0 ? '+' : '') + ev.toFixed(1) + 'BB</div>' +
           '<p class="muted">勝率が必要勝率を上回ればコール、下回ればフォールド。実戦では相手の手は見えないので、相手のレンジ全体に対する勝率で考えます。</p>' };
@@ -357,7 +371,7 @@
     var dl = E.disp(lab);
     var name = lab.length === 2 && lab[0] === lab[1] ? dl + '(ポケットペア)' : lab.length === 3 ? dl + (lab[2] === 's' ? '(スーテッド)' : '(オフスーツ)') : dl + '(スーテッド+オフスーツ)';
     var o = mcOptions(n, [n + 3, n - 3, n + 6, Math.max(1, n - 4), n * 2].filter(function (v) { return v > 0; }), function (v) { return v + '通り'; });
-    return { table: '<div class="eyebrow">コンボ数</div><div style="font-family:var(--font-display);font-size:26px;margin-top:6px">' + name + '</div>' +
+    return { skill: 'combos', table: '<div class="eyebrow">コンボ数</div><div style="font-family:var(--font-display);font-size:26px;margin-top:6px">' + name + '</div>' +
         (blocker ? '<div class="board">' + cardHTML(dead[0]) + '<span class="muted" style="font-size:13px">がボードに見えている</span></div>' : ''),
       q: '相手が持ちうる組み合わせは何通り?', options: o.options, answer: o.answer,
       explain: '<div class="formula">ペア6通り · スーテッド4通り · オフスーツ12通り</div>' +
@@ -686,11 +700,13 @@
     });
   }
 
-  if (window.PT_PLAY) window.PT_PLAY({
+  Object.assign(ui, {
     app: app, views: views, go: go, $: $, $all: $all, esc: esc, cardHTML: cardHTML, gridHTML: gridHTML, mixBG: mixBG, award: award,
-    backBtn: backBtn, actionMap: actionMap, chartHTML: chartHTML,
+    backBtn: backBtn, actionMap: actionMap, chartHTML: chartHTML, P: P, save: save, track: track,
     openTheory: function (id) { learnTab = 'theory'; learnOpen = id; go('learn'); }
   });
+  if (window.PT_COURSE) window.PT_COURSE(ui);
+  if (window.PT_PLAY) window.PT_PLAY(ui);
   renderHUD();
   route();
 })();
