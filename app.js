@@ -83,10 +83,11 @@
     if (!views[name]) name = 'lobby';
     app.innerHTML = '';
     window.scrollTo(0, 0);
+    $all('nav.rail a').forEach(function (a) { if (a.dataset.view === name || (name === 'drill' && a.dataset.view === 'lesson')) { a.setAttribute('aria-current', 'page'); a.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } else a.removeAttribute('aria-current'); });
     views[name]();
   }
   window.addEventListener('hashchange', route);
-  function backBtn() { return '<button class="back" data-go="lobby">← ロビーに戻る</button>'; }
+  function backBtn() { return ''; } // the tab rail replaces per-page back buttons
   app.addEventListener('click', function (e) {
     var g = e.target.closest('[data-go]');
     if (g) { e.preventDefault(); go(g.getAttribute('data-go')); }
@@ -108,8 +109,9 @@
     ];
     app.innerHTML =
       '<section class="table hero pop">' +
-        '<div style="text-align:left"><div class="eyebrow">No-Limit Hold\'em · 6-max · 100BB</div><h1>ポーカー道場</h1>' +
-        '<p class="muted" style="margin:6px 0 0">遊びながら「なぜその行動が正しいのか」を数字で身につける練習場。</p></div>' +
+        '<div style="text-align:left"><div class="eyebrow">今日の練習</div><h1>打って、振り返って、直す。</h1>' +
+        '<p class="muted" style="margin:6px 0 0">ボットと対戦すると判断が採点され、弱点に合わせたレッスンが届きます。</p>' +
+        '<div class="row" style="margin-top:12px"><button class="btn gold" data-go="play">対戦をはじめる</button><button class="btn ghost" data-go="lesson">レッスンを見る</button></div></div>' +
         '<div class="hand">' + cardsHTML(hand, 'big') + '</div>' +
       '</section>' +
       '<div class="stats" style="margin:18px 0">' +
@@ -151,6 +153,17 @@
     var x = Math.random() * 1326;
     for (var i = 0; i < 169; i++) { x -= E.classSize(E.CLASS_LABELS[i]); if (x <= 0) return E.CLASS_LABELS[i]; }
     return '72o';
+  }
+  function handNote(cls) { // one-line description of why this kind of hand is good or bad
+    var R = E.RANKS, hi = cls[0], lo = cls[1], suited = cls[2] === 's', pair = cls.length === 2;
+    var gap = R.indexOf(hi) - R.indexOf(lo);
+    if (pair) return R.indexOf(hi) >= 8 ? '高いペアはそのままでも強い手です。' : '小さいペアは、フロップでスリーカードになれば大きく勝てる手です(約12%)。';
+    if (hi === 'A' && suited) return R.indexOf(lo) <= 3 ? 'A5s〜A2sはストレートやAハイのフラッシュになれるうえ、Aを1枚持つことで相手のAAやAKを減らせます。' : 'Aのスーテッドは、最強のフラッシュ(Aハイ)を作れるのが強みです。';
+    if (hi === 'A') return 'Aのオフスーツは、ペアになってもキッカー(もう1枚)の差で負けやすいので、弱いものは早い席では外します。';
+    if (suited && gap <= 2) return 'スーテッドのつながった手は、フラッシュとストレートの両方を狙えて、当たると大きく勝てます。';
+    if (suited) return 'スーテッドは、フラッシュの分だけオフスーツより価値が上がります(勝率で約3%)。';
+    if (R.indexOf(lo) >= 8) return '絵札同士のオフスーツは、ペアになったときに強いのでレンジに入りやすい手です。';
+    return 'つながりもマークの一致もないオフスーツは、ペアになっても勝ちきれないことが多い手です。';
   }
   function chartHTML(m, hl) {
     var colors = { raise: COL.raise, '3bet': COL.threebet, call: COL.call, fold: 'rgba(0,0,0,.35)' };
@@ -202,7 +215,7 @@
         var legend = spot.rfi ? '<span style="--c:' + COL.raise + '">オープン</span><span style="--c:rgba(0,0,0,.5)">フォールド</span>' :
           '<span style="--c:' + COL.threebet + '">3ベット</span><span style="--c:' + COL.call + '">コール</span><span style="--c:rgba(0,0,0,.5)">フォールド</span>';
         $('#pfFb').innerHTML = '<div class="fb pop ' + (ok ? 'ok' : 'ng') + '"><div class="verdict">' + (ok ? '正解!' : '残念…') + '</div>' +
-          '<p><b>' + E.disp(label) + '</b> は <b>' + names[right] + '</b> が基本です。</p><p class="muted">' + esc(note) + '</p>' +
+          '<p><b>' + E.disp(label) + '</b> は <b>' + names[right] + '</b> が基本です。</p><p>' + handNote(label) + '</p><p class="muted">' + esc(note) + '</p>' +
           chartHTML(m, label) + '<div class="legend">' + legend + '</div>' +
           '<div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn gold" id="pfNext">次の問題 →</button></div></div>';
         $('#pfNext').onclick = pfQuestion;
