@@ -16,9 +16,10 @@
     return (r << 2) | s;
   }
   function cardStr(c) { return RANKS[c >> 2] + SUITS[c & 3]; }
+  function disp(s) { return String(s).replace(/T/g, '10'); } // show 10 instead of T
   function parseCards(str) {
     var out = [];
-    var s = (str || '').replace(/[\s,]+/g, '');
+    var s = (str || '').replace(/10/g, 'T').replace(/[\s,]+/g, '');
     for (var i = 0; i + 1 < s.length; i += 2) out.push(card(s.substr(i, 2)));
     return out;
   }
@@ -155,7 +156,7 @@
   // Returns {label: weight}
   function parseRange(str) {
     var out = {};
-    (str || '').split(/[,\s]+/).forEach(function (part) {
+    (str || '').replace(/10/g, 'T').split(/[,\s]+/).forEach(function (part) {
       if (!part) return;
       var w = 1, idx = part.indexOf(':');
       if (idx >= 0) { w = parseFloat(part.slice(idx + 1)); part = part.slice(0, idx); }
@@ -382,7 +383,7 @@
 
   var API = {
     RANKS: RANKS, SUITS: SUITS, CAT_NAMES: CAT_NAMES,
-    card: card, cardStr: cardStr, parseCards: parseCards,
+    card: card, cardStr: cardStr, parseCards: parseCards, disp: disp,
     evaluate: evaluate, category: category,
     CLASS_LABELS: CLASS_LABELS, CLASS_INDEX: CLASS_INDEX, gridLabel: gridLabel,
     classCombos: classCombos, comboClass: comboClass, classSize: classSize,

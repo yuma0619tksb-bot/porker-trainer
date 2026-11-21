@@ -59,10 +59,14 @@
     var h = '<div class="gridwrap"><div class="grid">';
     for (var r = 0; r < 13; r++) for (var c = 0; c < 13; c++) {
       var lab = E.gridLabel(r, c), st = cellFn(lab) || {};
-      h += '<button type="button" class="cell' + (st.on ? ' on' : '') + (opts.hl === lab ? ' hl' : '') + '" data-l="' + lab + '" style="' + (st.bg ? 'background:' + st.bg : '') + '" title="' + esc(st.title || lab) + '">' + lab.replace(/o$|s$/, '') + (lab.length === 3 ? '<sub style="font-size:.7em">' + lab[2] + '</sub>' : '') + '</button>';
+      h += '<button type="button" class="cell' + (st.on ? ' on' : '') + (opts.hl === lab ? ' hl' : '') + '" data-l="' + lab + '" style="' + (st.bg ? 'background:' + st.bg : '') + '" title="' + esc(E.disp(st.title || lab)) + '">' + E.disp(lab.replace(/o$|s$/, '')) + (lab.length === 3 ? '<sub>' + lab[2] + '</sub>' : '') + '</button>';
     }
-    return h + '</div></div>';
+    return h + '</div></div>' + (opts.noGuide ? '' : GUIDE);
   }
+  var GUIDE = '<details class="guide"><summary>表の見方</summary><ul>' +
+    '<li>縦と横がカードの数字(左上がA、右下が2)。1マスが「手札2枚の組み合わせ」1種類です。</li>' +
+    '<li><b>斜めの線</b>はペア(例: AA)。<b>右上半分</b>は2枚が同じマーク(s=スーテッド、例: AKs)。<b>左下半分</b>は違うマーク(o=オフスーツ、例: AKo)。</li>' +
+    '<li>色の付いたマスが、その行動をとる手です。色の意味は表の下の凡例を見てください。白枠で光っているマスが今の問題の手です。</li></ul></details>';
   function mixBG(freqs, colors) { // horizontal stacked gradient
     var stops = [], x = 0;
     freqs.forEach(function (f, i) { if (f <= 0.001) return; var y = x + f * 100; stops.push(colors[i] + ' ' + x.toFixed(1) + '% ' + y.toFixed(1) + '%'); x = y; });
@@ -183,7 +187,7 @@
     body.innerHTML =
       '<section class="table pop"><div class="seats">' + seats + '</div>' +
       '<div class="hand" style="margin:10px 0">' + cardHTML(combo[0], 'big') + cardHTML(combo[1], 'big') + '</div>' +
-      '<div class="num muted" style="font-size:13px">' + label + (spot.rfi ? '' : ' · ' + spot.title) + '</div></section>' +
+      '<div class="num muted" style="font-size:13px">' + E.disp(label) + (spot.rfi ? '' : ' · ' + spot.title) + '</div></section>' +
       '<p style="margin:0">' + story + '</p>' +
       '<div class="choices">' + opts.map(function (o) { return '<button class="btn ' + o[2] + '" data-a="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
       '<div id="pfFb"></div>';
@@ -198,7 +202,7 @@
         var legend = spot.rfi ? '<span style="--c:' + COL.raise + '">オープン</span><span style="--c:rgba(0,0,0,.5)">フォールド</span>' :
           '<span style="--c:' + COL.threebet + '">3ベット</span><span style="--c:' + COL.call + '">コール</span><span style="--c:rgba(0,0,0,.5)">フォールド</span>';
         $('#pfFb').innerHTML = '<div class="fb pop ' + (ok ? 'ok' : 'ng') + '"><div class="verdict">' + (ok ? '正解!' : '残念…') + '</div>' +
-          '<p><b>' + label + '</b> は <b>' + names[right] + '</b> が基本です。</p><p class="muted">' + esc(note) + '</p>' +
+          '<p><b>' + E.disp(label) + '</b> は <b>' + names[right] + '</b> が基本です。</p><p class="muted">' + esc(note) + '</p>' +
           chartHTML(m, label) + '<div class="legend">' + legend + '</div>' +
           '<div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn gold" id="pfNext">次の問題 →</button></div></div>';
         $('#pfNext').onclick = pfQuestion;
@@ -337,13 +341,14 @@
     var dead = [];
     if (blocker) { var r0 = lab[0]; dead = [E.card(r0 + pick(['h', 's', 'd', 'c']))]; }
     var n = E.rangeCombos(range, dead).length;
-    var name = lab.length === 2 && lab[0] === lab[1] ? lab + '(ポケットペア)' : lab.length === 3 ? lab + (lab[2] === 's' ? '(スーテッド)' : '(オフスーツ)') : lab + '(スーテッド+オフスーツ)';
+    var dl = E.disp(lab);
+    var name = lab.length === 2 && lab[0] === lab[1] ? dl + '(ポケットペア)' : lab.length === 3 ? dl + (lab[2] === 's' ? '(スーテッド)' : '(オフスーツ)') : dl + '(スーテッド+オフスーツ)';
     var o = mcOptions(n, [n + 3, n - 3, n + 6, Math.max(1, n - 4), n * 2].filter(function (v) { return v > 0; }), function (v) { return v + '通り'; });
     return { table: '<div class="eyebrow">コンボ数</div><div style="font-family:var(--font-display);font-size:26px;margin-top:6px">' + name + '</div>' +
         (blocker ? '<div class="board">' + cardHTML(dead[0]) + '<span class="muted" style="font-size:13px">がボードに見えている</span></div>' : ''),
       q: '相手が持ちうる組み合わせは何通り?', options: o.options, answer: o.answer,
       explain: '<div class="formula">ペア6通り · スーテッド4通り · オフスーツ12通り</div>' +
-        (blocker ? '<p>ボードに ' + E.cardStr(dead[0]) + ' が1枚あるので、そのカードを含む組み合わせが消えます(カードリムーバル)。答えは <b>' + n + '通り</b>。</p>' : '<p>答えは <b>' + n + '通り</b>。</p>') +
+        (blocker ? '<p>ボードに ' + E.disp(E.cardStr(dead[0])) + ' が1枚あるので、そのカードを含む組み合わせが消えます(カードリムーバル)。答えは <b>' + n + '通り</b>。</p>' : '<p>答えは <b>' + n + '通り</b>。</p>') +
         '<p class="muted">相手の「強い手」と「ブラフ」が何通りずつあるかを数えるのが、レンジで考える第一歩です。</p>' };
   }
 
@@ -455,14 +460,14 @@
     $('#rePre', modal).onchange = function () { var p = PRESETS[+this.value]; if (p) { r = E.parseRange(p[1]); draw(); } };
     $('#reClr', modal).onclick = function () { r = {}; draw(); };
     $('#reCancel', modal).onclick = function () { modal.remove(); };
-    $('#reOk', modal).onclick = function () { modal.remove(); onDone(E.rangeToString(r)); };
+    $('#reOk', modal).onclick = function () { modal.remove(); onDone(E.disp(E.rangeToString(r))); };
   }
 
   // ---- equity calculator ----
   var eqState = { players: ['AhKh', 'QQ+,AKs,AKo'], board: '' };
   function labEquity() {
     var body = $('#labBody');
-    body.innerHTML = '<div class="panel stack"><p class="muted" style="margin:0;font-size:13px">具体的な手(例: AhKh)でも、レンジ(例: QQ+,AKs)でも入力できます。ボードは 0〜5枚(例: Kh9h4c)。カードは A K Q J T 9…2 と s h d c で書きます。</p>' +
+    body.innerHTML = '<div class="panel stack"><p class="muted" style="margin:0;font-size:13px">10は「10」でも「T」でも入力できます。具体的な手(例: AhKh)でも、レンジ(例: QQ+,AKs)でも入力できます。ボードは 0〜5枚(例: Kh9h4c)。カードは A K Q J T 9…2 と s h d c で書きます。</p>' +
       '<div id="eqPlayers" class="stack"></div><div class="row"><button class="btn small ghost" id="eqAdd">+ プレイヤー追加</button></div>' +
       '<label class="f">ボード<input type="text" id="eqBoard" placeholder="空欄ならプリフロップ" value="' + esc(eqState.board) + '"></label>' +
       '<div class="row"><button class="btn gold" id="eqRun">計算する</button><span class="muted num" id="eqInfo"></span></div><div class="progress" hidden id="eqProg"><i></i></div></div><div id="eqOut"></div>';
@@ -519,7 +524,7 @@
         return '<div class="bar"><span class="lbl">P' + (i + 1) + ' ' + esc(eqState.players[i]) + '</span><span class="track"><i style="width:' + (e * 100) + '%;background:' + colors[i] + '"></i></span><span class="num">' + pct(e) + '</span></div>';
       }).join('') + '</div><div class="detail"><table><tr><th>プレイヤー</th><th>勝率</th><th>勝ち</th><th>引分</th></tr>' + eq.map(function (e, i) {
         return '<tr><td>P' + (i + 1) + '</td><td>' + pct(e, 2) + '</td><td>' + pct(win[i], 2) + '</td><td>' + pct(tie[i], 2) + '</td></tr>';
-      }).join('') + '</table></div></div>';
+      }).join('') + '</table></div><ul class="plain muted"><li><b>勝率</b>: 引き分けを半分の勝ちとして数えた、最後まで行ったときに勝つ確率。</li><li><b>勝ち</b>: 単独で勝つ確率。<b>引分</b>: 同じ強さで山分けになる確率。</li></ul></div>';
     }
   }
 
@@ -540,12 +545,15 @@
       function g(arr, color) { return gridHTML(function (l) { var f = arr[E.CLASS_INDEX[l]]; return { on: f > 0.5, bg: f > 0.02 ? mixBG([f], [color]) : '', title: l + ' ' + pct(f, 0) }; }); }
       $('#pfOut').innerHTML = '<div class="stack"><div><h3>SB: オールイン <span class="num" style="color:var(--red)">' + (pp / 13.26).toFixed(1) + '%</span></h3>' + g(r.push, COL.raise) + '</div>' +
         '<div><h3>BB: コール <span class="num" style="color:var(--blue)">' + (cp / 13.26).toFixed(1) + '%</span></h3>' + g(r.call, '#4a8be8') + '</div>' +
-        '<div class="detail" id="pfDetail">マスをタップすると、その手の期待値が出ます。</div>' +
+        '<div class="detail" id="pfDetail">マスをタップすると、その手でオールイン(またはコール)したときの平均の損得が出ます。</div>' +
         '<p class="note-box" style="margin:0">読み方: 色の幅がその手を使う頻度。境目の手は混合戦略になることがあります。スタックを短くするほどSBのオールイン範囲が広がり、BBは「オッズがいいので」広くコールするようになります。</p></div>';
       $all('.cell', $('#pfOut')).forEach(function (c) {
         c.onclick = function () {
           var i = E.CLASS_INDEX[c.dataset.l];
-          $('#pfDetail').innerHTML = '<b>' + c.dataset.l + '</b> · SBオールインの期待値 ' + (r.evPush[i] >= 0 ? '+' : '') + r.evPush[i].toFixed(2) + 'BB(フォールドは −0.5BB) · BBコールの期待値 ' + (r.evCall[i] >= 0 ? '+' : '') + r.evCall[i].toFixed(2) + 'BB(フォールドは −1BB)';
+          var ep = r.evPush[i], ec = r.evCall[i];
+          $('#pfDetail').innerHTML = '<b class="big">' + E.disp(c.dataset.l) + '</b><ul class="plain">' +
+            '<li>SBがオールインした時の平均の損得: <b>' + (ep >= 0 ? '+' : '') + ep.toFixed(2) + 'BB</b>(降りると −0.5BB) → ' + (ep > -0.5 ? '<b class="good">オールインが得</b>' : '<b class="bad">降りる方が得</b>') + '</li>' +
+            '<li>BBがコールした時の平均の損得: <b>' + (ec >= 0 ? '+' : '') + ec.toFixed(2) + 'BB</b>(降りると −1BB) → ' + (ec > -1 ? '<b class="good">コールが得</b>' : '<b class="bad">降りる方が得</b>') + '</li></ul>';
         };
       });
     }
@@ -574,8 +582,8 @@
       '<label class="f">プリセット<select id="rvPre">' + RIVER_PRESETS.map(function (x, i) { return '<option value="' + i + '"' + (i === riverPreset ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label>' +
       '<p class="note-box" style="margin:0">' + esc(p.note) + '</p>' +
       '<div class="fgrid"><label class="f">ボード(5枚)<input type="text" id="rvBoard" value="' + p.board + '"></label><label class="f">ポット(BB)<input type="number" id="rvPot" value="' + p.pot + '" min="1"></label><label class="f">残りスタック(BB)<input type="number" id="rvStack" value="' + p.stack + '" min="1"></label></div>' +
-      '<div class="row" style="flex-wrap:nowrap"><label class="f" style="flex:1">OOP(先に行動)のレンジ<textarea id="rvOop">' + esc(p.oop) + '</textarea></label><button class="btn small ghost" id="rvOopG" style="align-self:flex-end">表</button></div>' +
-      '<div class="row" style="flex-wrap:nowrap"><label class="f" style="flex:1">IP(後に行動)のレンジ<textarea id="rvIp">' + esc(p.ip) + '</textarea></label><button class="btn small ghost" id="rvIpG" style="align-self:flex-end">表</button></div>' +
+      '<div class="row" style="flex-wrap:nowrap"><label class="f" style="flex:1">OOP(先に行動)のレンジ<textarea id="rvOop">' + esc(E.disp(p.oop)) + '</textarea></label><button class="btn small ghost" id="rvOopG" style="align-self:flex-end">表</button></div>' +
+      '<div class="row" style="flex-wrap:nowrap"><label class="f" style="flex:1">IP(後に行動)のレンジ<textarea id="rvIp">' + esc(E.disp(p.ip)) + '</textarea></label><button class="btn small ghost" id="rvIpG" style="align-self:flex-end">表</button></div>' +
       '<div class="f"><span class="muted" style="font-size:13px">OOPのベットサイズ(ポット比)</span>' + sizesHTML('oopS', p.sizes) + '</div>' +
       '<div class="f"><span class="muted" style="font-size:13px">IPのベットサイズ(ポット比)</span>' + sizesHTML('ipS', p.ipSizes) + '</div>' +
       '<div class="row"><label class="check"><input type="checkbox" id="rvRaise"' + (p.raise ? ' checked' : '') + '>オールインのレイズを許可</label>' +
@@ -658,9 +666,9 @@
     $all('.cell', out).forEach(function (c) {
       c.onclick = function () {
         var cl = nd.classes[c.dataset.l];
-        if (!cl) { $('#rvDetail').innerHTML = '<span class="muted">' + c.dataset.l + ' はこの場面のレンジにありません。</span>'; return; }
-        $('#rvDetail').innerHTML = '<table><tr><th>' + c.dataset.l + '</th>' + nd.actions.map(function (a) { return '<th>' + esc(a.split(' ')[0]) + '</th>'; }).join('') + '</tr>' +
-          cl.combos.map(function (cb) { return '<tr><td>' + cb.cards + '</td>' + cb.f.map(function (f) { return '<td>' + pct(f, 0) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
+        if (!cl) { $('#rvDetail').innerHTML = '<span class="muted">' + E.disp(c.dataset.l) + ' はこの場面のレンジにありません。</span>'; return; }
+        $('#rvDetail').innerHTML = '<table><tr><th>' + E.disp(c.dataset.l) + '</th>' + nd.actions.map(function (a) { return '<th>' + esc(a.split(' ')[0]) + '</th>'; }).join('') + '</tr>' +
+          cl.combos.map(function (cb) { return '<tr><td>' + E.disp(cb.cards) + '</td>' + cb.f.map(function (f) { return '<td>' + pct(f, 0) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
       };
     });
   }

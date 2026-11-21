@@ -292,8 +292,8 @@
       html += '<h3 style="margin-top:8px">プレースタイルの数字</h3><div class="panel"><div class="detail"><table><tr><th>項目</th><th>あなた</th><th>目安</th><th>判定</th></tr>' +
         Object.keys(G.TARGETS).map(function (k) {
           var T = G.TARGETS[k], v = s.stat[k], st = statusOf(k, v, s.samples[k] || 0);
-          return '<tr><td style="font-family:var(--font-body)">' + T.name + ' <span class="muted">(' + (s.samples[k] || 0) + ')</span></td><td>' + fmtStat(k, v) + '</td><td>' + (k === 'af' ? T.lo + '〜' + T.hi : T.lo + '〜' + T.hi + (T.unit === '%' ? '%' : 'pt')) + '</td><td><span class="pill ' + st[0] + '">' + st[1] + '</span></td></tr>';
-        }).join('') + '</table></div><p class="muted" style="margin:8px 0 0;font-size:12px">( )内は数えた回数。少ないうちは参考値です。目安は6人卓キャッシュゲームの一般的な値です。</p></div>';
+          return '<tr><td style="font-family:var(--font-body)">' + T.name + ' <span class="muted">(' + (s.samples[k] || 0) + '回)</span><span class="sdesc">' + T.desc + '</span></td><td>' + fmtStat(k, v) + '</td><td>' + (k === 'af' ? T.lo + '〜' + T.hi : T.lo + '〜' + T.hi + (T.unit === '%' ? '%' : 'pt')) + '</td><td><span class="pill ' + st[0] + '">' + st[1] + '</span></td></tr>';
+        }).join('') + '</table></div><p class="muted" style="margin:8px 0 0">かっこ内は数えた回数。20回未満は「参考」と表示します。目安は6人卓キャッシュゲームの一般的な値で、外れている項目が直す候補です。</p></div>';
 
       // by position
       var order = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
@@ -325,11 +325,11 @@
       var names = ['あなた'].concat((h.opp || []).map(function (o) { return o.n; }));
       var pos = [h.pos].concat((h.opp || []).map(function (o) { return o.pos; }));
       (h.log || []).forEach(function (r) {
-        if (r[0] !== last) { last = r[0]; out += '<div style="color:var(--gold);margin-top:4px">' + st[r[0]] + (r[0] ? ' ' + (h.board || '').slice(0, (2 + r[0]) * 2) : '') + '</div>'; }
+        if (r[0] !== last) { last = r[0]; out += '<div style="color:var(--gold);margin-top:4px">' + st[r[0]] + (r[0] ? ' ' + E.disp((h.board || '').slice(0, (2 + r[0]) * 2)) : '') + '</div>'; }
         var m = { fold: 'フォールド', check: 'チェック', call: 'コール', bet: 'ベット', raise: 'レイズ' };
         out += '<div' + (r[1] === 0 ? ' style="color:var(--gold)"' : '') + '>' + pos[r[1]] + ' ' + esc(names[r[1]]) + ': ' + (m[r[2]] || r[2]) + (r[3] ? ' ' + r[3] + 'BB' : '') + '</div>';
       });
-      var shown = (h.opp || []).filter(function (o) { return !o.folded; }).map(function (o) { return esc(o.n) + ' ' + o.hole; }).join(' / ');
+      var shown = (h.opp || []).filter(function (o) { return !o.folded; }).map(function (o) { return esc(o.n) + ' ' + E.disp(o.hole); }).join(' / ');
       return '<div class="detail">' + out + (shown ? '<div class="muted" style="margin-top:4px">最後まで残った相手: ' + shown + '</div>' : '') + '<div style="margin-top:4px">結果: ' + (h.net >= 0 ? '+' : '') + h.net.toFixed(1) + 'BB</div></div>';
     }
 
@@ -392,7 +392,7 @@
         var opts = spot.rfi ? [['raise', 'オープン', 'red'], ['fold', 'フォールド', 'slate']] : [['3bet', '3ベット', 'red'], ['call', 'コール', 'blue'], ['fold', 'フォールド', 'slate']];
         body.innerHTML = '<p class="muted" style="margin:0;font-size:13px">対戦で間違えた場面(' + items.length + '件)と、その近くの手から出題します。正解 ' + stats.ok + ' / ' + stats.n + '</p>' +
           '<section class="table pop"><div class="eyebrow">' + (spot.rfi ? spot.pos + ' · 全員フォールドで回ってきた' : esc(spot.title)) + '</div>' +
-          '<div class="hand" style="margin:10px 0">' + cardHTML(combo[0], 'big') + cardHTML(combo[1], 'big') + '</div><div class="num muted">' + label + '</div></section>' +
+          '<div class="hand" style="margin:10px 0">' + cardHTML(combo[0], 'big') + cardHTML(combo[1], 'big') + '</div><div class="num muted">' + E.disp(label) + '</div></section>' +
           '<div class="choices">' + opts.map(function (o) { return '<button class="btn ' + o[2] + '" data-a="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div><div id="drFb"></div>';
         $all('[data-a]', body).forEach(function (b) {
           b.onclick = function () {
@@ -401,7 +401,7 @@
             $all('[data-a]', body).forEach(function (x) { x.disabled = true; if (x.dataset.a === right) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); });
             ui.award('drill', ok);
             var nm = { raise: 'オープン', fold: 'フォールド', '3bet': '3ベット', call: 'コール' };
-            $('#drFb').innerHTML = '<div class="fb pop ' + (ok ? 'ok' : 'ng') + '"><div class="verdict">' + (ok ? '正解!' : '残念…') + '</div><p>' + label + ' は <b>' + nm[right] + '</b>。</p>' +
+            $('#drFb').innerHTML = '<div class="fb pop ' + (ok ? 'ok' : 'ng') + '"><div class="verdict">' + (ok ? '正解!' : '残念…') + '</div><p>' + E.disp(label) + ' は <b>' + nm[right] + '</b>。</p>' +
               ui.chartHTML(m, label) + '<div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn gold" id="drNext">次へ →</button></div></div>';
             $('#drNext').onclick = q;
           };

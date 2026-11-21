@@ -418,10 +418,10 @@
       var mine = a === 'raise' ? 'raise' : a === 'fold' ? 'fold' : 'limp';
       var ok = mine === exp;
       var msg;
-      if (ok) msg = sit.pos + 'から ' + lab + ' は' + (exp === 'raise' ? 'オープン' : 'フォールド') + 'で正解。';
-      else if (mine === 'limp') msg = 'リンプ(コールだけで参加)は不利になりやすい。' + lab + ' は' + (exp === 'raise' ? 'レイズで参加' : 'フォールド') + 'が基本。';
-      else if (exp === 'raise') msg = sit.pos + 'では ' + lab + ' はオープンできる手。降りすぎ。';
-      else msg = sit.pos + 'では ' + lab + ' は弱すぎる。参加しすぎ。';
+      if (ok) msg = sit.pos + 'から ' + E.disp(lab) + ' は' + (exp === 'raise' ? 'オープン' : 'フォールド') + 'で正解。';
+      else if (mine === 'limp') msg = 'リンプ(コールだけで参加)は不利になりやすい。' + E.disp(lab) + ' は' + (exp === 'raise' ? 'レイズで参加' : 'フォールド') + 'が基本。';
+      else if (exp === 'raise') msg = sit.pos + 'では ' + E.disp(lab) + ' はオープンできる手。降りすぎ。';
+      else msg = sit.pos + 'では ' + E.disp(lab) + ' は弱すぎる。参加しすぎ。';
       return { type: 'pf-open', pos: sit.pos, label: lab, ok: ok, exp: exp, mine: mine, leak: ok ? null : (mine === 'fold' ? 'pf-tight' : mine === 'limp' ? 'pf-limp' : 'pf-loose'), msg: msg + (sit.limpers ? '(リンパーがいる時は少し絞って大きめにレイズ)' : '') };
     }
     if (sit.raises === 1 && sit.callers === 0 && FACING) {
@@ -433,7 +433,7 @@
       var order = { fold: 0, call: 1, '3bet': 2 };
       return { type: 'pf-facing', spot: spot.f.id, pos: sit.pos, label: lab, ok: ok2, exp: exp2, mine: mine2,
         leak: ok2 ? null : (order[mine2] < order[exp2] ? 'pf-tight' : 'pf-loose'),
-        msg: spot.f.title + ': ' + lab + ' は ' + ACT_JA[exp2] + ' が基本' + (ok2 ? '。正解。' : '(あなたは' + ACT_JA[mine2] + ')。') };
+        msg: spot.f.title + ': ' + E.disp(lab) + ' は ' + ACT_JA[exp2] + ' が基本' + (ok2 ? '。正解。' : '(あなたは' + ACT_JA[mine2] + ')。') };
     }
     return null;
   }
@@ -512,15 +512,15 @@
 
   // ---------- aggregate stats + leaks ----------
   var TARGETS = {
-    vpip: { lo: 20, hi: 30, name: '参加率(VPIP)', unit: '%' },
-    pfr: { lo: 16, hi: 25, name: 'レイズ参加率(PFR)', unit: '%' },
-    gap: { lo: 0, hi: 7, name: '参加率とレイズ率の差', unit: 'pt' },
-    tb: { lo: 6, hi: 12, name: '3ベット率', unit: '%' },
-    cb: { lo: 50, hi: 75, name: 'Cベット率', unit: '%' },
-    fcb: { lo: 35, hi: 55, name: 'Cベットに降りる率', unit: '%' },
-    af: { lo: 1.8, hi: 4, name: 'アグレッション(ベット÷コール)', unit: '' },
-    wtsd: { lo: 24, hi: 33, name: 'ショーダウン到達率', unit: '%' },
-    wsd: { lo: 48, hi: 100, name: 'ショーダウン勝率', unit: '%' }
+    vpip: { lo: 20, hi: 30, name: '参加率(VPIP)', unit: '%', desc: '配られた手のうち、自分からチップを入れて参加した割合' },
+    pfr: { lo: 16, hi: 25, name: 'レイズ参加率(PFR)', unit: '%', desc: 'プリフロップでレイズして参加した割合' },
+    gap: { lo: 0, hi: 7, name: '参加率とレイズ率の差', unit: 'pt', desc: '大きいほど「コールだけで参加」が多い' },
+    tb: { lo: 6, hi: 12, name: '3ベット率', unit: '%', desc: '誰かのオープンに、さらにレイズし返した割合' },
+    cb: { lo: 50, hi: 75, name: 'Cベット率', unit: '%', desc: '自分がレイズした後、フロップでも続けてベットした割合' },
+    fcb: { lo: 35, hi: 55, name: 'Cベットに降りる率', unit: '%', desc: '相手のCベットにすぐ降りた割合' },
+    af: { lo: 1.8, hi: 4, name: '攻める度合い', unit: '', desc: 'フロップ以降の(ベット+レイズ)÷コール。小さいと受け身' },
+    wtsd: { lo: 24, hi: 33, name: 'ショーダウン到達率', unit: '%', desc: 'フロップを見た後、最後に手を見せ合うまで行った割合' },
+    wsd: { lo: 48, hi: 100, name: 'ショーダウン勝率', unit: '%', desc: '手を見せ合ったときに勝った割合' }
   };
   function aggregate(hands) {
     var n = hands.length, s = { n: n, net: 0, vpip: 0, pfr: 0, tbOpp: 0, tb: 0, cbOpp: 0, cb: 0, fcbOpp: 0, fcb: 0, aggr: 0, calls: 0, saw: 0, wtsd: 0, wsd: 0, byPos: {}, dec: { n: 0, ok: 0 }, leaks: {}, mistakes: [] };
