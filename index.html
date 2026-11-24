@@ -276,6 +276,16 @@ details.ch summary .row { flex: none; }
 .pk { border: 0; border-radius: 4px; background: var(--paper); color: var(--suit-s); font-family: var(--font-num); font-weight: 600; font-size: 12px; padding: 6px 0; line-height: 1.15; cursor: pointer; letter-spacing: -.04em; }
 .pk.h { color: var(--suit-h); } .pk.d { color: var(--suit-d); } .pk.c { color: var(--suit-c); }
 .pk:disabled { opacity: .18; cursor: default; }
+
+/* assist panel */
+details.assist { background: rgba(217,180,90,.07); border: 1px solid rgba(217,180,90,.45); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+details.assist > summary { cursor: pointer; font-weight: 700; color: var(--gold); }
+.astep { display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: start; font-size: 14px; }
+.astep .an { width: 22px; height: 22px; border-radius: 50%; background: var(--gold); color: #2a1f05; font-family: var(--font-num); font-size: 12px; font-weight: 600; display: grid; place-items: center; margin-top: 2px; }
+.af { font-family: var(--font-num); font-size: 13.5px; line-height: 1.6; }
+.af .muted { font-family: var(--font-body); font-size: 12px; margin-left: 4px; }
+details.averdict { border-top: 1px dashed var(--line); padding-top: 6px; }
+details.averdict > summary { cursor: pointer; color: var(--ivory); font-weight: 700; font-size: 14px; }
 footer { margin-top: 30px; font-size: 12px; color: var(--muted); text-align: center; }
 </style>
 

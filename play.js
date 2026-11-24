@@ -53,7 +53,7 @@
 
   window.PT_PLAY = function (ui) {
     var $ = ui.$, $all = ui.$all, esc = ui.esc, cardHTML = ui.cardHTML;
-    var settings = { coach: true, speed: 650 };
+    var settings = { coach: true, speed: 650, assist: true };
     try { Object.assign(settings, JSON.parse(localStorage.getItem('poker-dojo-play') || '{}')); } catch (e) {}
     function saveSettings() { try { localStorage.setItem('poker-dojo-play', JSON.stringify(settings)); } catch (e) {} }
     var S = { table: null, token: 0, hands: 0, net: 0, lastAct: {}, notes: [], heroResolve: null };
@@ -63,7 +63,7 @@
       var token = ++S.token;
       ui.app.innerHTML = ui.backBtn() +
         '<div class="stack"><div class="row" style="justify-content:space-between"><h2>対戦モード</h2><span class="num muted" id="plSess"></span></div>' +
-        '<div class="row" style="gap:14px"><label class="check"><input type="checkbox" id="plCoach"' + (settings.coach ? ' checked' : '') + '>その場でコーチが指摘</label>' +
+        '<div class="row" style="gap:14px"><label class="check"><input type="checkbox" id="plAssist"' + (settings.assist ? ' checked' : '') + '>アシスト(計算の手順を表示)</label><label class="check"><input type="checkbox" id="plCoach"' + (settings.coach ? ' checked' : '') + '>その場でコーチが指摘</label>' +
         '<label class="check">速さ<select id="plSpeed" style="width:auto"><option value="1100">ゆっくり</option><option value="650">ふつう</option><option value="250">速い</option></select></label>' +
         '<span class="muted" id="plStore" style="font-size:12px"></span></div>' +
         '<div class="ptable" id="pTable"><p class="muted" style="position:absolute;inset:45% 0 auto;text-align:center">卓を準備中…</p></div>' +
@@ -73,6 +73,7 @@
       $('#plSpeed').value = String(settings.speed);
       $('#plSpeed').onchange = function () { settings.speed = +this.value; saveSettings(); };
       $('#plCoach').onchange = function () { settings.coach = this.checked; saveSettings(); };
+      $('#plAssist').onchange = function () { settings.assist = this.checked; saveSettings(); if (S.heroResolve && S.table && S.table.toAct === 0 && !S.table.done) renderActions(S.info); };
       store.ready.then(function () { var el = $('#plStore'); if (el) el.textContent = store.mode === 'cloud' ? '記録: クラウドに保存' : '記録: この端末に保存'; });
       loadEq().then(function () {
         if (token !== S.token) return;
@@ -84,7 +85,7 @@
     async function runHands(token) {
       var t = S.table;
       while (token === S.token) {
-        t.newHand(); S.lastAct = {}; S.notes = [];
+        t.newHand(); S.lastAct = {}; S.notes = []; S.sit0 = null;
         renderTable(); renderNote(); renderLog();
         while (!t.done) {
           if (token !== S.token) return;
@@ -92,7 +93,8 @@
           if (i === 0) {
             if (t.street === 0 && !t.hero.first) { sit = G.preflopSituation(t, 0); t.hero.first = 1; }
             else if (t.street > 0) snap = G.postflopSnapshot(t, 0);
-            renderTable(); renderActions();
+            S.info = { sit: sit || S.sit0, snap: snap }; if (sit) S.sit0 = sit;
+            renderTable(); renderActions(S.info);
             act = await new Promise(function (r) { S.heroResolve = r; });
             S.heroResolve = null; $('#pAct') && ($('#pAct').innerHTML = '');
             if (token !== S.token) return;
@@ -116,7 +118,7 @@
         // hand over
         var hero = t.players[0];
         S.hands++; S.net += hero.net / G.BB;
-        var recd = G.heroRecord(t);
+        var recd = G.heroRecord(t); recd.assist = !!settings.assist;
         store.save(recd);
         if (t.hero.decisions.length) ui.award('play', t.hero.decisions.every(function (d) { return d.ok; }));
         renderTable(); renderResult(); renderLog();
@@ -161,7 +163,70 @@
       var sess = $('#plSess'); if (sess) sess.textContent = S.hands + 'ハンド · ' + (S.net >= 0 ? '+' : '') + S.net.toFixed(1) + 'BB';
     }
 
-    function renderActions() {
+    // ---------- assist: walk through the math with the live numbers ----------
+    function drawOuts(t) { // unseen cards that complete a straight or better for the hero
+      var h = t.players[0].hole, b = t.board;
+      if (b.length < 3 || b.length > 4) return [];
+      var now = E.evaluate(h.concat(b)) >> 20; if (now >= 4) return [];
+      var seen = {}; h.concat(b).forEach(function (c) { seen[c] = 1; });
+      var out = [];
+      for (var c = 0; c < 52; c++) {
+        if (seen[c]) continue;
+        var nb = b.concat([c]), mine = E.evaluate(h.concat(nb));
+        if ((mine >> 20) < 4) continue;
+        if (nb.length >= 5 && E.evaluate(nb) >= mine) continue; // board plays itself
+        out.push(c);
+      }
+      return out;
+    }
+    function step(n, title, body) { return '<div class="astep"><span class="an">' + n + '</span><div><b>' + title + '</b><div class="af">' + body + '</div></div></div>'; }
+    function assistHTML(t, L, info) {
+      var pot = t.pot(), h = t.players[0], label = E.comboClass(h.hole[0], h.hole[1]);
+      var streetBets = t.players.reduce(function (a, p) { return a + p.bet; }, 0), before = pot - streetBets;
+      var steps = [], verdict = '', n = 1;
+      var pctTop = G.pctOf(label);
+      if (t.street === 0) {
+        var sit = info.sit, g = sit ? G.gradePreflop(sit, { type: 'fold' }) : null;
+        var nm = { raise: 'オープン(レイズ)', fold: 'フォールド', '3bet': '3ベット', call: 'コール' };
+        steps.push(step(n++, '手の強さ', E.disp(label) + ' は169種類の中で <b>上位 ' + Math.round(pctTop) + '%</b> の手。' + (t.raises === 0 && t.players[0].pos !== 'BB' ? '<br>' + h.pos + 'では表で上位 約' + Math.round(window.PokerEngine.rangePercent(E.parseRange(window.PT_DATA.rfi[h.pos] || '')) ) + '% までオープンします。' : '')));
+        if (L.toCall && t.raises > 0) {
+          steps.push(step(n++, '真ん中のチップ', '今のポットは <b>' + bb(pot) + 'BB</b>(ブラインドとレイズの合計)'));
+          steps.push(step(n++, 'コールしたら', bb(pot) + ' + あなたのコール ' + bb(L.toCall) + ' = <b>' + bb(pot + L.toCall) + 'BB</b>'));
+          steps.push(step(n++, '必要勝率', bb(L.toCall) + ' ÷ ' + bb(pot + L.toCall) + ' = <b>' + Math.round(L.toCall / (pot + L.toCall) * 100) + '%</b>'));
+        }
+        verdict = g ? '表の基本は <b>' + nm[g.exp] + '</b>。' + (L.toCall ? 'プリフロップは必要勝率が低く見えても、後の街で不利な位置になるので、表に従うのが基本です。' : '') :
+          '表にない場面です。上位' + Math.round(pctTop) + '%の手なので、' + (pctTop < 8 ? '強気に参加して良い手' : pctTop < 25 ? '相手が多いときは慎重に' : '基本はフォールド寄り') + 'です。';
+      } else {
+        var snap = info.snap || G.postflopSnapshot(t, 0), eq = snap.eq, outs = drawOuts(t);
+        var unseen = 52 - 2 - t.board.length;
+        var outsLine = outs.length ? 'ストレート以上が完成するカード <b>' + outs.length + '枚</b><div class="board" style="justify-content:flex-start;min-height:0;margin:4px 0">' + outs.map(function (c) { return cardHTML(c, 'sm'); }).join('') + '</div>次の1枚で当たる確率 ' + outs.length + ' ÷ ' + unseen + ' = ' + Math.round(outs.length / unseen * 100) + '%(2の法則: ' + outs.length + '×2 = ' + outs.length * 2 + '%)'
+          : '今の役: <b>' + E.CAT_NAMES[E.evaluate(h.hole.concat(t.board)) >> 20] + '</b>。ストレートやフラッシュのドローはなし。';
+        if (L.toCall) {
+          var after = pot + L.toCall, need = L.toCall / after, ev = eq * after - L.toCall;
+          steps.push(step(n++, '真ん中のチップ', '前の街までのポット ' + bb(before) + ' + この街のベット ' + bb(streetBets) + ' = <b>' + bb(pot) + 'BB</b>'));
+          steps.push(step(n++, 'コールしたら', bb(pot) + ' + あなたのコール ' + bb(L.toCall) + ' = <b>' + bb(after) + 'BB</b>'));
+          steps.push(step(n++, '必要勝率', 'コール額 ' + bb(L.toCall) + ' ÷ コール後の合計 ' + bb(after) + ' = <b>' + Math.round(need * 100) + '%</b>'));
+          steps.push(step(n++, '自分の勝率', outsLine + '<br>相手が持っていそうな手(レンジ)全体に対する勝率: <b>約' + Math.round(eq * 100) + '%</b><span class="muted">(エンジン計算)</span>'));
+          verdict = '勝率 約' + Math.round(eq * 100) + '% ' + (eq >= need ? '≧' : '<') + ' 必要勝率 ' + Math.round(need * 100) + '% → <b>' + (eq >= need ? 'コールは得' : 'コールは損') + '</b><br>コールの期待値 = ' + Math.round(eq * 100) + '% × ' + bb(after) + ' − ' + bb(L.toCall) + ' = <b>' + (ev >= 0 ? '+' : '') + bb(ev) + 'BB</b>' +
+            (eq > 0.7 ? '<br>勝率がかなり高いので、レイズしてもっと大きくするのも選択肢。' : '') +
+            (eq < need && outs.length && t.street === 1 ? '<br>ただしフロップでは、当たった後に追加でもらえる分(インプライドオッズ)も考えます。' : '');
+        } else {
+          steps.push(step(n++, '真ん中のチップ', '今のポットは <b>' + bb(pot) + 'BB</b>'));
+          steps.push(step(n++, '自分の勝率', outsLine + '<br>相手のレンジ全体に対する勝率: <b>約' + Math.round(eq * 100) + '%</b><span class="muted">(エンジン計算)</span>'));
+          var half = Math.round(pot / 2);
+          steps.push(step(n++, 'ベットしたら相手は?', 'ポットの半分 ' + bb(half) + 'BB をベットすると、相手のコールに必要な勝率は ' + bb(half) + ' ÷ ' + bb(pot + 2 * half) + ' = <b>25%</b>。'));
+          verdict = eq > 0.62 ? '勝率 約' + Math.round(eq * 100) + '% と高い → <b>ベットして弱い手からチップをもらう</b>(バリューベット)' :
+            eq > 0.4 ? '勝率 約' + Math.round(eq * 100) + '% は中くらい → <b>チェック</b>してポットを小さく保つのが基本' :
+            outs.length ? '今は弱いがドロー' + outs.length + '枚あり → <b>チェック</b>か、相手を降ろす狙いの<b>セミブラフ</b>' : '勝率 約' + Math.round(eq * 100) + '% と低い → <b>チェック</b>。ベットされたら必要勝率と比べる';
+        }
+      }
+      return '<details class="assist" open><summary>アシスト: 計算の手順</summary><div class="stack" style="gap:8px">' + steps.join('') +
+        '<details class="averdict"><summary>判断を見る(まず自分で考えてから)</summary><div class="af" style="padding-top:6px">' + verdict + '</div></details>' +
+        '<button class="linkbtn" data-course="' + (t.street === 0 ? 'preflop' : 'odds') + '" style="align-self:flex-start;font-size:13px">この計算を1から学ぶ</button></div></details>';
+    }
+
+    function renderActions(info) {
+      info = info || {};
       var el = $('#pAct'); if (!el) return;
       var t = S.table, L = t.legal(0), pot = t.pot();
       var presets = [];
@@ -178,7 +243,7 @@
       }
       var need = L.toCall ? Math.round(L.toCall / (pot + L.toCall) * 100) : 0;
       var raiseWord = t.currentBet === 0 ? 'ベット' : 'レイズ';
-      el.innerHTML = '<div class="panel stack actpanel">' +
+      el.innerHTML = (settings.assist ? assistHTML(t, L, info) : '') + '<div class="panel stack actpanel">' +
         (L.toCall ? '<div class="muted num" style="font-size:12px">コール ' + bb(L.toCall) + 'BB · ポット ' + bb(pot) + 'BB · 必要勝率 ' + need + '%</div>' : '') +
         '<div class="choices" style="grid-template-columns:repeat(2,1fr)">' +
           (L.canCheck ? '<button class="btn blue" data-h="check">チェック</button><button class="btn slate" data-h="fold" disabled>フォールド</button>'
@@ -194,6 +259,7 @@
       $all('[data-to]', el).forEach(function (b) { b.onclick = function () { $('#pSlider').value = b.dataset.to; setAmt(); }; });
       $all('[data-h]', el).forEach(function (b) { b.onclick = function () { if (S.heroResolve) S.heroResolve({ type: b.dataset.h }); }; });
       if ($('#pRaise')) $('#pRaise').onclick = function () { if (S.heroResolve) S.heroResolve({ type: 'raise', to: +$('#pSlider').value }); };
+      if (ui.bindCourseButtons) ui.bindCourseButtons(el);
     }
 
     function renderNote() {
