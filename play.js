@@ -320,9 +320,53 @@
       return '<span class="row" style="gap:3px;flex-wrap:nowrap">' + E.parseCards(h.hole).map(function (c) { return cardHTML(c, 'sm'); }).join('') + '</span>';
     }
 
-    function renderLesson(hands) {
+    var lessonFilter = 'all';
+    // accuracy of graded decisions in a set of hands, overall and by kind
+    function decAcc(hs) {
+      var r = { all: [0, 0], odds: [0, 0], pf: [0, 0], n: hs.length, ev: 0 };
+      hs.forEach(function (h) { (h.dec || []).forEach(function (d) {
+        var k = d.type === 'facing' ? 'odds' : d.type && d.type.indexOf('pf') === 0 ? 'pf' : null;
+        r.all[0]++; if (d.ok) r.all[1]++;
+        if (k) { r[k][0]++; if (d.ok) r[k][1]++; }
+        if (!d.ok) r.ev += Math.abs(d.ev || 0) / G.BB;
+      }); });
+      return r;
+    }
+    function pctOf(a) { return a[0] ? Math.round(a[1] / a[0] * 100) : null; }
+    function compareHTML(withA, without) {
+      var A = decAcc(withA), N = decAcc(without);
+      function row(name, a, n) {
+        var pa = pctOf(a), pn = pctOf(n);
+        var w = function (v, c) { return v == null ? '' : '<i style="width:' + v + '%;background:' + c + '"></i>'; };
+        return '<div class="cmp"><div class="cmp-h"><b>' + name + '</b></div>' +
+          '<div class="bar"><span class="lbl">アシストあり</span><span class="track">' + w(pa, 'var(--gold)') + '</span><span class="num">' + (pa == null ? '—' : pa + '%') + ' <span class="muted">(' + a[0] + ')</span></span></div>' +
+          '<div class="bar"><span class="lbl">アシストなし</span><span class="track">' + w(pn, 'var(--blue)') + '</span><span class="num">' + (pn == null ? '—' : pn + '%') + ' <span class="muted">(' + n[0] + ')</span></span></div></div>';
+      }
+      var po = pctOf(A.odds), no = pctOf(N.odds), pa = pctOf(A.all), na = pctOf(N.all);
+      var msg;
+      if (A.odds[0] < 5 || N.odds[0] < 5) msg = 'オッズの判断が両方5回以上たまると、比べた結果をここに書きます(今: あり ' + A.odds[0] + '回 / なし ' + N.odds[0] + '回)。';
+      else if (po - no >= 15) msg = 'アシストがあると正解できているのに、なしだと ' + (po - no) + 'pt 下がっています。<b>計算のやり方は分かっているが、自分で数字を出す習慣がまだ</b>の状態です。アシストなしで、コールの前に「コール額 ÷ コール後の合計」だけ毎回口に出してみましょう。';
+      else if (no - po >= 10) msg = 'アシストなしの方が正確です。手順に頼らず判断できています。アシストはオフで練習して大丈夫です。';
+      else if (Math.max(po, no) < 60) msg = 'アシストの有無にかかわらず、オッズの判断が6割を切っています。計算の手順そのものがあやふやなので、<b>オッズの基礎コース</b>から始めるのがおすすめです。';
+      else msg = 'アシストあり・なしで大きな差はありません。自分で計算できているので、アシストをオフにして実戦に近い形で練習しましょう。';
+      return '<h3 style="margin-top:8px">アシストあり・なしの比較</h3><div class="panel stack">' +
+        row('判断全体の正確さ', A.all, N.all) + row('オッズの判断(コール/フォールド)', A.odds, N.odds) + row('プリフロップの判断', A.pf, N.pf) +
+        '<p style="margin:0">' + msg + '</p>' +
+        '<p class="muted" style="margin:0;font-size:12px">( )は判定された回数。アシスト機能を入れる前の記録は「なし」に入ります。ハンド数: あり ' + withA.length + ' / なし ' + without.length + '</p></div>';
+    }
+
+    function renderLesson(allHands) {
       var body = $('#lsBody'); if (!body) return;
       body.dataset.done = '1';
+      var withA = allHands.filter(function (h) { return h.assist; }), without = allHands.filter(function (h) { return !h.assist; });
+      var hands = lessonFilter === 'on' ? withA : lessonFilter === 'off' ? without : allHands;
+      var filterTabs = '<div class="tabs" role="tablist">' + [['all', 'すべて (' + allHands.length + ')'], ['off', 'アシストなし (' + without.length + ')'], ['on', 'アシストあり (' + withA.length + ')']].map(function (x) {
+        return '<button class="tab" data-lf="' + x[0] + '" aria-selected="' + (lessonFilter === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div>';
+      function bindFilter() { $all('[data-lf]', body).forEach(function (b) { b.onclick = function () { lessonFilter = b.dataset.lf; renderLesson(allHands); }; }); }
+      if (allHands.length && !hands.length) {
+        body.innerHTML = filterTabs + '<div class="panel"><p style="margin:0">この条件のハンドはまだありません。対戦画面の「アシスト」を' + (lessonFilter === 'on' ? 'オン' : 'オフ') + 'にして遊ぶと、ここで分析できます。</p></div>' + compareHTML(withA, without);
+        bindFilter(); return;
+      }
       if (!hands.length) {
         var ca0 = ui.courseAreas ? ui.courseAreas([]) : [];
         body.innerHTML = ca0.filter(function (a) { return a.weak && !a.done; }).map(ui.courseCard).join('') + '<div class="panel stack" style="text-align:center"><h3>まだプレー記録がありません</h3><p class="muted" style="margin:0">対戦モードで遊ぶと、あなたの判断を1つずつ採点して、弱点に合わせたレッスンを作ります。まずは30ハンドほど遊んでみてください。</p><div><button class="btn gold" data-go="play">対戦モードへ</button></div></div>' +
@@ -332,7 +376,7 @@
       }
       var s = G.aggregate(hands), lk = G.leaks(s);
       var acc = s.dec.n ? Math.round(s.dec.ok / s.dec.n * 100) : null;
-      var html = '';
+      var html = filterTabs;
       html += '<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">' +
         '<div class="stat"><div class="v">' + s.n + '</div><div class="k">分析したハンド</div></div>' +
         '<div class="stat"><div class="v" style="color:' + (s.net >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (s.net >= 0 ? '+' : '') + s.net.toFixed(1) + '</div><div class="k">収支 BB</div></div>' +
@@ -342,7 +386,7 @@
       if (store.mode !== 'cloud') html += '<p class="note-box" style="margin:0">この画面ではクラウドに接続できないため、この端末の記録だけを分析しています。</p>';
 
       // basics courses for weak areas (decided from quiz + play data)
-      var ca = ui.courseAreas ? ui.courseAreas(hands) : [];
+      var ca = ui.courseAreas ? ui.courseAreas(allHands) : [];
       var weakC = ca.filter(function (a) { return a.weak && !a.done; });
       weakC.forEach(function (a) { html += ui.courseCard(a); });
 
@@ -364,6 +408,7 @@
         '<p class="muted" style="margin:0;font-size:12px">上の統計と間違えたハンドをClaudeに渡して、あなた専用のアドバイスと練習課題を作ります(あなたのClaudeの使用量を使います)。</p>' +
         '<div id="aiOut" class="prose" style="white-space:pre-wrap">' + esc(coachText) + '</div></div>';
 
+      html += compareHTML(withA, without);
       // stats
       html += '<h3 style="margin-top:8px">プレースタイルの数字</h3><div class="panel"><div class="detail"><table><tr><th>項目</th><th>あなた</th><th>目安</th><th>判定</th></tr>' +
         Object.keys(G.TARGETS).map(function (k) {
@@ -393,6 +438,7 @@
       var restC = ca.filter(function (a) { return !(a.weak && !a.done); });
       if (restC.length) html += '<h3 style="margin-top:8px">基礎コース</h3>' + restC.map(ui.courseCard).join('');
       body.innerHTML = html;
+      bindFilter();
       ui.bindCourseButtons(body);
       $all('[data-drill]', body).forEach(function (b) { b.onclick = function () {
         var d = b.dataset.drill, a = ca.filter(function (x) { return x.area === d; })[0];
@@ -434,6 +480,7 @@
         '統計(目安: 参加率20〜30%、レイズ参加率16〜25%、3ベット率6〜12%、Cベット率50〜75%、Cベットに降りる率35〜55%、アグレッション1.8〜4、ショーダウン到達率24〜33%): ' + JSON.stringify(stats),
         '自動判定した弱点(多い順): ' + JSON.stringify(lk.slice(0, 4).map(function (l) { return { 弱点: l.title, 回数: l.count }; })),
         '間違えたハンドの例: ' + JSON.stringify(mistakes),
+        'アシスト(計算手順の表示)あり/なしの判断の正確さ: ' + (function () { var all = store.cache || [], a = decAcc(all.filter(function (h) { return h.assist; })), n = decAcc(all.filter(function (h) { return !h.assist; })); return 'あり ' + (pctOf(a.all) == null ? '記録なし' : pctOf(a.all) + '%') + '(オッズ判断 ' + (pctOf(a.odds) == null ? '—' : pctOf(a.odds) + '%') + ')、なし ' + (pctOf(n.all) == null ? '記録なし' : pctOf(n.all) + '%') + '(オッズ判断 ' + (pctOf(n.odds) == null ? '—' : pctOf(n.odds) + '%') + ')。差が大きければ、その意味も説明してください。'; })(),
         '基礎があやふやと判定した分野: ' + JSON.stringify((ui.courseAreas ? ui.courseAreas(store.cache || []) : []).filter(function (a) { return a.weak; }).map(function (a) { return a.title + '(' + a.reasons.join('、') + ')'; })) +
           '。この分野が含まれる場合は、専門用語を使わず「ポットとは何か」のような基礎の基礎から、足し算・割り算の途中式つきで説明してください。',
         '',
